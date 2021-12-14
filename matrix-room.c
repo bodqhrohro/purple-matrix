@@ -83,7 +83,7 @@ static const size_t purple_max_media_size=640*480*3;
 /**
  * Get the member table for a room
  */
-static MatrixRoomMemberTable *matrix_room_get_member_table(
+MatrixRoomMemberTable *matrix_room_get_member_table(
         PurpleConversation *conv)
 {
     return purple_conversation_get_data(conv, PURPLE_CONV_MEMBER_TABLE);

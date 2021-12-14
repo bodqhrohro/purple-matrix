@@ -31,9 +31,16 @@
 #include <json-glib/json-glib.h>
 
 #include "libmatrix.h"
+#include "matrix-roommembers.h"
 
 struct _PurpleConversation;
 struct _PurpleConnection;
+
+/**
+ * @param conv   conversation info
+ */
+MatrixRoomMemberTable *matrix_room_get_member_table(
+        struct _PurpleConversation *conv);
 
 /**
  * @param conv   conversation info

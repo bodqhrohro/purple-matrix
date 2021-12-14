@@ -33,6 +33,7 @@
 #include "debug.h"
 #include "prpl.h"
 #include "version.h"
+#include "roomlist.h"
 
 #include "matrix-connection.h"
 #include "matrix-e2e.h"
@@ -167,6 +168,7 @@ static char *matrixprpl_get_chat_name(GHashTable *components)
 static void matrixprpl_join_chat(PurpleConnection *gc, GHashTable *components)
 {
     const char *room = g_hash_table_lookup(components, PRPL_CHAT_INFO_ROOM_ID);
+    if (room == NULL) return;
     int chat_id = g_str_hash(room);
     PurpleConversation *conv;
     PurpleConvChat *chat;
@@ -190,6 +192,7 @@ static void matrixprpl_join_chat(PurpleConnection *gc, GHashTable *components)
     if (!g_slist_find(gc->buddy_chats, conv))
             gc->buddy_chats = g_slist_append(gc->buddy_chats, conv);
     purple_conversation_update(conv, PURPLE_CONV_UPDATE_CHATLEFT);
+    purple_conversation_present(conv);
 }
 
 
@@ -263,6 +266,67 @@ static char *matrixprpl_get_cb_real_name(PurpleConnection *gc, int id,
     return res;
 }
 
+/**
+ * Serialize a roomlist room
+ */
+static gchar *matrixprpl_roomlist_serialize(PurpleRoomlistRoom *room)
+{
+        GList *fields = purple_roomlist_room_get_fields(room);
+        const gchar *id = (const gchar *) fields->data;
+
+        return g_strdup(id);
+}
+
+/**
+ * Get a room list
+ */
+PurpleRoomlist *matrixprpl_roomlist_get_list(PurpleConnection *gc)
+{
+    GList *fields = NULL;
+    PurpleRoomlistField *f;
+
+    MatrixConnectionData *acct = purple_connection_get_protocol_data(gc);
+    PurpleRoomlist *roomlist = purple_roomlist_new(acct->pc->account);
+
+    f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("ID"), PRPL_CHAT_INFO_ROOM_ID, TRUE);
+    fields = g_list_append(fields, f);
+
+    f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Users"), "users", FALSE);
+    fields = g_list_append(fields, f);
+
+    f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Topic"), "topic", FALSE);
+    fields = g_list_append(fields, f);
+
+    purple_roomlist_set_fields(roomlist, fields);
+
+    GList *ptr;
+
+    for (ptr = purple_get_conversations(); ptr != NULL; ptr = g_list_next(ptr)) {
+        PurpleConversation *conv = ptr->data;
+        if (conv->account == acct->pc->account) {
+	    PurpleRoomlistRoom *room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, conv->name, NULL);
+
+	    purple_roomlist_room_add_field(roomlist, room, g_strdup(conv->name));
+
+	    MatrixRoomMemberTable *member_table = matrix_room_get_member_table(conv);
+	    GList *members = matrix_roommembers_get_active_members(member_table, TRUE);
+
+	    gchar *num_members = g_strdup_printf("%d", g_list_length(members));
+	    purple_roomlist_room_add_field(roomlist, room, num_members);
+	    g_free(num_members);
+
+	    purple_roomlist_room_add_field(roomlist, room, g_strdup(conv->title));
+
+	    purple_roomlist_room_add(roomlist, room);
+
+	    g_list_free(members);
+	}
+    }
+
+    return roomlist;
+}
+
+
 
 /******************************************************************************
  *
@@ -333,7 +397,7 @@ static PurplePluginProtocolInfo prpl_info =
     matrixprpl_get_cb_real_name,           /* get_cb_real_name */
     NULL,                                  /* set_chat_topic */
     NULL,                                  /* find_blist_chat */
-    NULL,                                  /* roomlist_get_list */
+    matrixprpl_roomlist_get_list,          /* roomlist_get_list */
     NULL,                                  /* roomlist_cancel */
     NULL,                                  /* roomlist_expand_category */
     NULL,                                  /* can_receive_file */
@@ -342,7 +406,7 @@ static PurplePluginProtocolInfo prpl_info =
     NULL,                                  /* offline_message */
     NULL,                                  /* whiteboard_prpl_ops */
     NULL,                                  /* send_raw */
-    NULL,                                  /* roomlist_room_serialize */
+    matrixprpl_roomlist_serialize,         /* roomlist_room_serialize */
     NULL,                                  /* unregister_user */
     NULL,                                  /* send_attention */
     NULL,                                  /* get_attention_types */
